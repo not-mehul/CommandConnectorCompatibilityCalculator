@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Camera Model Counter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    #result-table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    #result-table th, #result-table td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    #result-table th { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h1>Camera Model Counter</h1>
+  <p>Select a CSV or Excel (.xlsx) file that contains a column of camera model names. If your file has several sheets, the first one will be used.</p>
+  <input type="file" id="file-input" accept=".csv, .xlsx" />
+  <div id="status" style="margin-top:1rem;font-weight:bold;"></div>
+  <table id="result-table"></table>
+
+  <!-- Dependencies loaded from CDNs for ease of GitHub‑Pages hosting -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <script>
+    // ----- DOM shorthand -----
+    const $ = (id) => document.getElementById(id);
+    const fileInput   = $("file-input");
+    const statusBox   = $("status");
+    const resultTable = $("result-table");
+
+    fileInput.addEventListener("change", async (evt) => {
+      const file = evt.target.files[0];
+      if (!file) return;
+      clearOutput();
+      writeStatus(`Parsing \u201C${file.name}\u201D…`);
+
+      try {
+        const rows = await loadFile(file);
+        writeStatus(`Parsed ${rows.length.toLocaleString()} rows. Detecting camera models…`);
+
+        const counts = tallyCameraModels(rows);
+        renderTable(counts);
+        writeStatus(`Found ${Object.keys(counts).length} unique camera models.`);
+      } catch (err) {
+        console.error(err);
+        writeStatus(`Error: ${err.message}`);
+      }
+    });
+
+    // ---------- Helpers ----------
+
+    function clearOutput() {
+      statusBox.textContent = "";
+      resultTable.innerHTML = "";
+    }
+
+    function writeStatus(msg) {
+      statusBox.textContent = msg;
+    }
+
+    function loadFile(file) {
+      const ext = file.name.split(".").pop().toLowerCase();
+      if (ext === "csv") {
+        return new Promise((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (res) => resolve(res.data),
+            error: reject,
+          });
+        });
+      }
+      if (ext === "xlsx") {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const wb = XLSX.read(e.target.result, { type: "binary" });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+            resolve(json);
+          };
+          reader.onerror = reject;
+          reader.readAsBinaryString(file);
+        });
+      }
+      throw new Error("Unsupported file type. Please choose a .csv or .xlsx file.");
+    }
+
+    function tallyCameraModels(rows) {
+      /**
+       * 1. First look for an explicit column whose header includes the word "camera".
+       * 2. Otherwise do a brand‑pattern scan of every cell (common DSLR/MILC makers).
+       *    Extend or replace this logic to suit your dataset.
+       */
+      const counts = Object.create(null);
+      const brandRegex = /(canon|nikon|sony|fujifilm|fuji|panasonic|olympus|pentax|leica)[\w\-\s]*[a-z0-9]/i;
+
+      rows.forEach((row) => {
+        let model = null;
+        // 1. Named column check
+        for (const key in row) {
+          if (/camera/i.test(key)) {
+            const val = (row[key] || "").toString().trim();
+            if (val) {
+              model = val;
+              break;
+            }
+          }
+        }
+        // 2. Brand regex scan (fallback)
+        if (!model) {
+          for (const key in row) {
+            const val = (row[key] || "").toString();
+            const m = val.match(brandRegex);
+            if (m) {
+              model = m[0].trim();
+              break;
+            }
+          }
+        }
+        if (model) {
+          counts[model] = (counts[model] || 0) + 1;
+        }
+      });
+      return counts;
+    }
+
+    function renderTable(counts) {
+      // Build <thead>
+      const thead = resultTable.createTHead();
+      const headRow = thead.insertRow();
+      ["Camera Model", "Count"].forEach(text => {
+        const th = document.createElement("th");
+        th.textContent = text;
+        headRow.appendChild(th);
+      });
+
+      // Build <tbody>
+      const tbody = resultTable.createTBody();
+      Object.entries(counts)
+        .sort(([,a],[,b]) => b - a) // Descending by count
+        .forEach(([model, count]) => {
+          const row = tbody.insertRow();
+          row.insertCell().textContent = model;
+          row.insertCell().textContent = count;
+        });
+    }
+  </script>
+</body>
+</html>
