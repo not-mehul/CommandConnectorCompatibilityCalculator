@@ -51,7 +51,7 @@ referencing==0.36.2
 RapidFuzz==3.12.2
 pyzmq==26.3.0
 pytz==2025.1
-regex==2024.11.6
+regex==2025.8.29
 requests==2.32.3
 rpds-py==0.23.1
 six==1.17.0
