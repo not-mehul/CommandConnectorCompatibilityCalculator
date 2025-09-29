@@ -2,7 +2,7 @@ appnope==0.1.4
 asttokens==3.0.0
 attrs==25.3.0
 backcall==0.2.0
-beautifulsoup4==4.13.3
+beautifulsoup4==4.14.2
 bleach==6.2.0
 black~=25.1.0
 certifi==2025.1.31
